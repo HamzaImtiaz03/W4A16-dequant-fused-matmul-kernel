@@ -1,0 +1,12 @@
+# W4A16 dequant-fused matmul kernel — dependencies
+#
+# On Google Colab, torch + triton come PREINSTALLED with a matching CUDA build.
+# Do NOT `pip install torch triton` on Colab — you risk pulling a CPU-only or
+# mismatched build and breaking the runtime. Only install the small extras.
+#
+# Versions are intentionally unpinned: use whatever the Colab image ships.
+torch        # preinstalled on Colab (CUDA build); needed >= 2.1 for triton.dot fp32 acc
+triton       # preinstalled on Colab; the PRIMARY backend
+numpy
+matplotlib
+pytest
