@@ -126,16 +126,26 @@ python benchmarks/plot_results.py           # plots + fills the table below
 
 ---
 
-## Key insight
+## Results & honest analysis
 
-- **Decode (small M, e.g. M=1):** memory-bound. W4A16 reads packed int4 weights
-  (~4× fewer bytes than fp16), so it wins on latency even though it does extra unpack
-  + dequant math.
-- **Prefill (large M):** compute-bound. The GEMM approaches the fp16 tensor-core bound;
-  the weight-bandwidth advantage shrinks and W4A16 trends toward fp16 cuBLAS.
+See the top-level **[README](../README.md)** for charts and the full discussion. Summary from
+a Colab Tesla T4 (group size 128):
+
+- **Correctness:** matches the fp32 oracle within **1 fp16 ULP** across all shapes/group sizes.
+- **Memory:** packed weights are **~3.76× smaller** than fp16 (33.6 MB → 8.9 MB at 4096×4096).
+- **vs naive dequant-then-matmul:** **7–11× faster at decode (M=1)** — fusion avoids the
+  full-precision weight round-trip through DRAM. This is the core W4A16 win, and it works.
+- **vs fp16 cuBLAS:** **slower (0.07–0.71×)**. This is a correct *reference* kernel that reaches
+  only ~6–10% of T4 memory bandwidth and ~4% of fp16 compute peak. Closing the gap needs
+  vectorized packed loads (avoid re-reading each int32 per nibble), a dedicated GEMV path for
+  `M=1`, and tensor-core-tuned tiling.
+
+The theory still holds — decode is memory-bound (favoring 4× smaller weights), prefill is
+compute-bound (approaching the fp16 tensor-core roof) — but *realizing* the decode win against
+cuBLAS in practice requires the kernel optimizations above.
 
 <!-- RESULTS_TABLE -->
-*(Run `python benchmarks/plot_results.py` on the T4 to fill in this table and the plots
+*(Run `python benchmarks/plot_results.py` on the T4 to regenerate this table and the plots
 under `benchmarks/plots/`.)*
 <!-- RESULTS_TABLE -->
 
