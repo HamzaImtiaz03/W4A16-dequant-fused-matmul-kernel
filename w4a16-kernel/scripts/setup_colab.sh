@@ -9,8 +9,10 @@ echo "==================================================================="
 
 # Colab already ships torch + triton with a matching CUDA build.
 # Install only the lightweight extras so we don't risk breaking the runtime.
-echo "[1/3] Installing lightweight extras (numpy / matplotlib / pytest)..."
-pip install -q numpy matplotlib pytest
+# `ninja` is REQUIRED to JIT-compile the CUDA stretch kernel (torch load_inline);
+# some Colab images (e.g. torch 2.11/cu128) don't ship it by default.
+echo "[1/3] Installing lightweight extras (ninja / numpy / matplotlib / pytest)..."
+pip install -q ninja numpy matplotlib pytest
 
 echo "[2/3] nvidia-smi:"
 if command -v nvidia-smi >/dev/null 2>&1; then

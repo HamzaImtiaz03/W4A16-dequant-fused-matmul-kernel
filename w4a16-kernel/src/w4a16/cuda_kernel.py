@@ -1,8 +1,14 @@
-"""Build/load the W4A16 CUDA SIMT extension via ``load_inline`` (STRETCH goal).
+"""Build/load the W4A16 CUDA SIMT extension (STRETCH goal).
 
-This compiles ``cuda/w4a16_gemm.cu`` + ``cuda/bindings.cpp`` for the *detected* GPU
-arch (fallback ``sm_75`` / Turing T4). The compiled module is cached on disk by
-torch and memoized in-process, so repeated Colab cells don't recompile.
+Compiles ``cuda/w4a16_gemm.cu`` + ``cuda/bindings.cpp`` for the *detected* GPU arch
+(fallback ``sm_75`` / Turing T4). The compiled module is cached on disk by torch and
+memoized in-process, so repeated Colab cells don't recompile.
+
+Implementation note: we use ``torch.utils.cpp_extension.load`` (build from the source
+*files*) rather than ``load_inline`` (build from source *strings*). On some Colab
+images (observed: torch 2.11 / cu128) ``load_inline`` silently failed to produce the
+``.so`` and surfaced only an opaque "cannot open shared object file" ImportError, while
+the file-based ``load`` builds cleanly. Requires ``ninja`` (see scripts/setup_colab.sh).
 
 Only attempt this after the Triton path passes all correctness tests.
 """
@@ -18,11 +24,8 @@ __all__ = ["w4a16_matmul_cuda", "load_cuda_module", "is_available"]
 _MODULE = None  # memoized compiled extension
 _HERE = os.path.dirname(__file__)
 _CUDA_DIR = os.path.join(_HERE, "cuda")
-
-
-def _read(path: str) -> str:
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+_CPP_SRC = os.path.join(_CUDA_DIR, "bindings.cpp")
+_CU_SRC = os.path.join(_CUDA_DIR, "w4a16_gemm.cu")
 
 
 def is_available() -> bool:
@@ -42,7 +45,7 @@ def load_cuda_module(verbose: bool = True):
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA GPU required to build the W4A16 CUDA extension")
 
-    from torch.utils.cpp_extension import load_inline
+    from torch.utils.cpp_extension import load
 
     cap = torch.cuda.get_device_capability(0)
     arch = f"{cap[0]}.{cap[1]}"  # e.g. "7.5"; fallback below if detection looks wrong
@@ -50,13 +53,9 @@ def load_cuda_module(verbose: bool = True):
         arch = "7.5"
     os.environ["TORCH_CUDA_ARCH_LIST"] = arch
 
-    cu_src = _read(os.path.join(_CUDA_DIR, "w4a16_gemm.cu"))
-    cpp_src = _read(os.path.join(_CUDA_DIR, "bindings.cpp"))
-
-    _MODULE = load_inline(
+    _MODULE = load(
         name="w4a16_cuda_ext",
-        cpp_sources=[cpp_src],   # contains PYBIND11_MODULE
-        cuda_sources=[cu_src],   # contains kernel + launcher
+        sources=[_CPP_SRC, _CU_SRC],   # bindings (PYBIND11_MODULE) + kernel/launcher
         extra_cuda_cflags=["-O3"],
         verbose=verbose,
     )

@@ -43,14 +43,19 @@ __global__ void w4a16_gemm_kernel(
         // Load activation tile (fp16 -> fp32).
         Xs[ty][tx] = (row < M && kx < K) ? __half2float(X[row * K + kx]) : 0.0f;
 
-        // Load + dequantize weight tile.
+        // Load + dequantize weight tile. The dequant (q - zero)*scale is done in fp16 to
+        // EXACTLY match the fp16 reference oracle (and the Triton kernel); we widen to
+        // fp32 only for accumulation. Doing the dequant in fp32 here would diverge from
+        // the oracle's fp16 rounding and inflate the error (~0.1) past the test tolerance.
+        // (__hsub/__hmul/__int2half_rn are used because -D__CUDA_NO_HALF_OPERATORS__ is set.)
         if (col < N && kw < K) {
             const int packed = qweight[(kw >> 3) * N + col];      // kw / 8
             const int nib = (packed >> (4 * (kw & 7))) & 0xF;     // unsigned nibble 0..15
             const int gi = kw / group_size;
-            const float s = __half2float(scales[gi * N + col]);
-            const float z = __half2float(zeros[gi * N + col]);
-            Ws[ty][tx] = (static_cast<float>(nib) - z) * s;
+            const __half s = scales[gi * N + col];
+            const __half z = zeros[gi * N + col];
+            const __half w = __hmul(__hsub(__int2half_rn(nib), z), s);  // fp16 dequant
+            Ws[ty][tx] = __half2float(w);
         } else {
             Ws[ty][tx] = 0.0f;
         }

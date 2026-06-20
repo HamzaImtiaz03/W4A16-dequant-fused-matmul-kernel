@@ -7,6 +7,7 @@
 # Versions are intentionally unpinned: use whatever the Colab image ships.
 torch        # preinstalled on Colab (CUDA build); needed >= 2.1 for triton.dot fp32 acc
 triton       # preinstalled on Colab; the PRIMARY backend
+ninja        # required to JIT-compile the CUDA stretch kernel (load_inline); not always on Colab
 numpy
 matplotlib
 pytest
